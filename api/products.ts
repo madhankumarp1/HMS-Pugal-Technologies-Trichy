@@ -17,6 +17,10 @@ const ProductSchema = new mongoose.Schema({
 const Product = mongoose.models.Product || mongoose.model('Product', ProductSchema);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    if (!process.env.MONGODB_URI) {
+        return res.status(500).json({ error: 'Server Error: MONGODB_URI environment variable is not defined.' });
+    }
+
     try {
         await dbConnect();
     } catch (error: any) {
