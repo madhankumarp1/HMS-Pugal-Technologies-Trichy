@@ -1,4 +1,3 @@
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import mongoose from 'mongoose';
 import dbConnect from './db';
@@ -17,10 +16,12 @@ const getProductModel = () => {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    // 1. Check Environment Variable
     if (!process.env.MONGODB_URI) {
         return res.status(500).json({ error: 'Server Error: MONGODB_URI environment variable is not defined.' });
     }
 
+    // 2. Connect to Database (Caught)
     try {
         await dbConnect();
     } catch (error: any) {
@@ -28,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ error: `Database Connection Failed: ${error.message}` });
     }
 
-    // Basic Security Check for Write Operations
+    // 3. Admin Security Check (Write Operations)
     if (req.method === 'POST' || req.method === 'DELETE') {
         const adminPassword = req.headers['x-admin-password'];
         if (adminPassword !== process.env.ADMIN_PASSWORD) {
@@ -36,109 +37,108 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
     }
 
+    // 4. Initialize Model (Lazy)
+    const Product = getProductModel();
+
+    // 5. Handle Methods
     if (req.method === 'GET') {
         try {
-            const Product = getProductModel();
+            const products = await Product.find({});
 
-            if (req.method === 'GET') {
-                try {
-                    const products = await Product.find({});
-
-                    // If no products exist, return the default list (for demo purposes)
-                    if (products.length === 0) {
-                        const defaultProducts = [
-                            {
-                                category: "Billing Solutions",
-                                items: [
-                                    { name: "Billing Machine (POS)", desc: "All-in-one touch POS systems for retail and restaurants." },
-                                    { name: "Thermal Printers", desc: "High-speed 2-inch and 3-inch thermal receipt printers." },
-                                    { name: "Bill Rolls", desc: "Premium quality thermal paper rolls in all sizes." },
-                                    { name: "Billing Software", desc: "Easy-to-use software for inventory andGST billing." }
-                                ]
-                            },
-                            {
-                                category: "Security Systems",
-                                items: [
-                                    { name: "CCTV Cameras", desc: "HD, IP, and Wireless cameras for home and business security." },
-                                    { name: "DVR/NVR Systems", desc: "Reliable recording systems with remote viewing capabilities." },
-                                    { name: "Biometric Attendance", desc: "Fingerprint and face recognition time attendance systems." }
-                                ]
-                            },
-                            {
-                                category: "Cash & Automation",
-                                items: [
-                                    { name: "Cash Counting Machine", desc: "Accurate loose note counters with fake note detection." },
-                                    { name: "Weighing Machines", desc: "Digital weighing scales for shops and industrial use." },
-                                    { name: "Sealing Machines", desc: "Heat sealers for packaging efficiency." }
-                                ]
-                            }
-                        ];
-                        return res.status(200).json(defaultProducts);
+            // Return default list if empty (optional demo feature turned off for now, or on if you prefer)
+            if (products.length === 0) {
+                const defaultProducts = [
+                    {
+                        category: "Billing Solutions",
+                        items: [
+                            { name: "Billing Machine (POS)", desc: "All-in-one touch POS systems for retail and restaurants." },
+                            { name: "Thermal Printers", desc: "High-speed 2-inch and 3-inch thermal receipt printers." },
+                            { name: "Bill Rolls", desc: "Premium quality thermal paper rolls in all sizes." },
+                            { name: "Billing Software", desc: "Easy-to-use software for inventory andGST billing." }
+                        ]
+                    },
+                    {
+                        category: "Security Systems",
+                        items: [
+                            { name: "CCTV Cameras", desc: "HD, IP, and Wireless cameras for home and business security." },
+                            { name: "DVR/NVR Systems", desc: "Reliable recording systems with remote viewing capabilities." },
+                            { name: "Biometric Attendance", desc: "Fingerprint and face recognition time attendance systems." }
+                        ]
+                    },
+                    {
+                        category: "Cash & Automation",
+                        items: [
+                            { name: "Cash Counting Machine", desc: "Accurate loose note counters with fake note detection." },
+                            { name: "Weighing Machines", desc: "Digital weighing scales for shops and industrial use." },
+                            { name: "Sealing Machines", desc: "Heat sealers for packaging efficiency." }
+                        ]
                     }
-
-                    return res.status(200).json(products);
-                } catch (error) {
-                    return res.status(500).json({ error: 'Failed to fetch products' });
-                }
+                ];
+                return res.status(200).json(defaultProducts);
             }
 
-            if (req.method === 'POST') {
-                try {
-                    const { category, name, desc } = req.body;
-
-                    if (!category || !name || !desc) {
-                        return res.status(400).json({ error: 'Missing required fields' });
-                    }
-
-                    const Product = getProductModel();
-                    let productCategory = await Product.findOne({ category });
-
-                    if (productCategory) {
-                        productCategory.items.push({ name, desc });
-                        await productCategory.save();
-                    } else {
-                        productCategory = await Product.create({
-                            category,
-                            items: [{ name, desc }]
-                        });
-                    }
-
-                    return res.status(201).json({ message: 'Product added successfully', product: productCategory });
-                } catch (error) {
-                    console.error(error);
-                    return res.status(500).json({ error: 'Failed to add product' });
-                }
-            }
-
-            if (req.method === 'DELETE') {
-                try {
-                    const { categoryId, itemId } = req.body;
-
-                    if (!categoryId || !itemId) {
-                        return res.status(400).json({ error: 'Missing required IDs' });
-                    }
-
-                    const Product = getProductModel();
-                    const productCategory = await Product.findById(categoryId);
-                    if (!productCategory) {
-                        return res.status(404).json({ error: 'Category not found' });
-                    }
-
-                    productCategory.items = productCategory.items.filter((item: any) => item._id.toString() !== itemId);
-
-                    if (productCategory.items.length === 0) {
-                        await Product.findByIdAndDelete(categoryId);
-                        return res.status(200).json({ message: 'Product and empty category deleted' });
-                    }
-
-                    await productCategory.save();
-                    return res.status(200).json({ message: 'Product deleted successfully' });
-
-                } catch (error) {
-                    console.error(error);
-                    return res.status(500).json({ error: 'Failed to delete product' });
-                }
-            }
-
-            return res.status(405).json({ error: 'Method not allowed' });
+            return res.status(200).json(products);
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ error: 'Failed to fetch products' });
         }
+    }
+
+    if (req.method === 'POST') {
+        try {
+            const { category, name, desc } = req.body;
+
+            if (!category || !name || !desc) {
+                return res.status(400).json({ error: 'Missing required fields' });
+            }
+
+            let productCategory = await Product.findOne({ category });
+
+            if (productCategory) {
+                productCategory.items.push({ name, desc });
+                await productCategory.save();
+            } else {
+                productCategory = await Product.create({
+                    category,
+                    items: [{ name, desc }]
+                });
+            }
+
+            return res.status(201).json({ message: 'Product added successfully', product: productCategory });
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ error: 'Failed to add product' });
+        }
+    }
+
+    if (req.method === 'DELETE') {
+        try {
+            const { categoryId, itemId } = req.body;
+
+            if (!categoryId || !itemId) {
+                return res.status(400).json({ error: 'Missing required IDs' });
+            }
+
+            const productCategory = await Product.findById(categoryId);
+            if (!productCategory) {
+                return res.status(404).json({ error: 'Category not found' });
+            }
+
+            productCategory.items = productCategory.items.filter((item: any) => item._id.toString() !== itemId);
+
+            if (productCategory.items.length === 0) {
+                await Product.findByIdAndDelete(categoryId);
+                return res.status(200).json({ message: 'Product and empty category deleted' });
+            }
+
+            await productCategory.save();
+            return res.status(200).json({ message: 'Product deleted successfully' });
+
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ error: 'Failed to delete product' });
+        }
+    }
+
+    return res.status(405).json({ error: 'Method not allowed' });
+}
