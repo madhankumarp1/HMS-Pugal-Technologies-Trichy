@@ -77,19 +77,25 @@ export default function AdminDashboardPage() {
                 })
             });
 
-            if (response.ok) {
-                // Clear form
-                setNewName('');
-                setNewDesc('');
-                // Refresh list
-                await fetchProducts();
-                alert('Product added successfully!');
-            } else {
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
                 const data = await response.json();
-                alert(data.error || 'Failed to add product');
+                if (response.ok) {
+                    setNewName('');
+                    setNewDesc('');
+                    await fetchProducts();
+                    alert('Product added successfully!');
+                } else {
+                    alert(`Error: ${data.error || 'Failed to add product'}`);
+                }
+            } else {
+                // Not JSON (likely HTML 404/500)
+                const text = await response.text();
+                alert(`Server Error (${response.status}): The server returned a non-JSON response. It might be hitting 404 or 500. Check console for details.`);
+                console.error('Non-JSON response:', text);
             }
-        } catch (err) {
-            alert('Error connecting to server');
+        } catch (err: any) {
+            alert(`Network/Connection Error: ${err.message}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -108,14 +114,21 @@ export default function AdminDashboardPage() {
                 body: JSON.stringify({ categoryId, itemId })
             });
 
-            if (response.ok) {
-                await fetchProducts();
-            } else {
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
                 const data = await response.json();
-                alert(data.error || 'Failed to delete product');
+                if (response.ok) {
+                    await fetchProducts();
+                } else {
+                    alert(`Delete Failed: ${data.error}`);
+                }
+            } else {
+                const text = await response.text();
+                alert(`Server Error (${response.status}): Non-JSON response.`);
+                console.error('Non-JSON response:', text);
             }
-        } catch (err) {
-            alert('Error deleting product');
+        } catch (err: any) {
+            alert(`Network/Connection Error: ${err.message}`);
         }
     };
 
