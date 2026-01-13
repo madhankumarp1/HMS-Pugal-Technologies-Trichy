@@ -19,6 +19,14 @@ const Product = mongoose.models.Product || mongoose.model('Product', ProductSche
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     await dbConnect();
 
+    // Basic Security Check for Write Operations
+    if (req.method === 'POST' || req.method === 'DELETE') {
+        const adminPassword = req.headers['x-admin-password'];
+        if (adminPassword !== process.env.ADMIN_PASSWORD) {
+            return res.status(401).json({ error: 'Unauthorized: Incorrect Admin Password' });
+        }
+    }
+
     if (req.method === 'GET') {
         try {
             const products = await Product.find({});
@@ -52,16 +60,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         ]
                     }
                 ];
-
-                // Optional: Uncomment to seed database automatically
-                // await Product.insertMany(defaultProducts);
-
                 return res.status(200).json(defaultProducts);
             }
 
             return res.status(200).json(products);
         } catch (error) {
             return res.status(500).json({ error: 'Failed to fetch products' });
+        }
+    }
+
+    if (req.method === 'POST') {
+        try {
+            const { category, name, desc } = req.body;
+
+            if (!category || !name || !desc) {
+                return res.status(400).json({ error: 'Missing required fields' });
+            }
+
+            let productCategory = await Product.findOne({ category });
+
+            if (productCategory) {
+                productCategory.items.push({ name, desc });
+                await productCategory.save();
+            } else {
+                productCategory = await Product.create({
+                    category,
+                    items: [{ name, desc }]
+                });
+            }
+
+            return res.status(201).json({ message: 'Product added successfully', product: productCategory });
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ error: 'Failed to add product' });
+        }
+    }
+
+    if (req.method === 'DELETE') {
+        try {
+            const { categoryId, itemId } = req.body;
+
+            if (!categoryId || !itemId) {
+                return res.status(400).json({ error: 'Missing required IDs' });
+            }
+
+            const productCategory = await Product.findById(categoryId);
+            if (!productCategory) {
+                return res.status(404).json({ error: 'Category not found' });
+            }
+
+            productCategory.items = productCategory.items.filter((item: any) => item._id.toString() !== itemId);
+
+            if (productCategory.items.length === 0) {
+                await Product.findByIdAndDelete(categoryId);
+                return res.status(200).json({ message: 'Product and empty category deleted' });
+            }
+
+            await productCategory.save();
+            return res.status(200).json({ message: 'Product deleted successfully' });
+
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ error: 'Failed to delete product' });
         }
     }
 
