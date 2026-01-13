@@ -17,7 +17,12 @@ const ProductSchema = new mongoose.Schema({
 const Product = mongoose.models.Product || mongoose.model('Product', ProductSchema);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    await dbConnect();
+    try {
+        await dbConnect();
+    } catch (error: any) {
+        console.error('Database connection failed:', error);
+        return res.status(500).json({ error: `Database Connection Failed: ${error.message}` });
+    }
 
     // Basic Security Check for Write Operations
     if (req.method === 'POST' || req.method === 'DELETE') {

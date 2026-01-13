@@ -43,10 +43,11 @@ export default function AdminDashboardPage() {
                 const data = await response.json();
                 setProducts(data);
             } else {
-                setError('Failed to load products');
+                const errorData = await response.json().catch(() => ({}));
+                setError(errorData.error || 'Failed to load products');
             }
         } catch (err) {
-            setError('Error loading products');
+            setError('Error loading products: Network or Server Error');
         } finally {
             setLoading(false);
         }
