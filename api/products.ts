@@ -1,32 +1,38 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import mongoose from 'mongoose';
-import dbConnect from './db';
 
-// Product Schema defined lazily to avoid top-level crashes
-const getProductModel = () => {
-    if (mongoose.models.Product) return mongoose.models.Product;
-    const ProductSchema = new mongoose.Schema({
-        category: { type: String, required: true },
-        items: [{
-            name: { type: String, required: true },
-            desc: { type: String, required: true },
-        }]
-    });
-    return mongoose.model('Product', ProductSchema);
-};
+// NOTE: We rely on DYNAMIC IMPORTS to catch module loading errors.
+// Do not add top-level imports for mongoose or db models.
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    // MASTER TRY/CATCH: This prevents "Invocation Failed" by catching EVERYTHING.
     try {
-        console.log(`[API] ${req.method} /api/products request received`);
+        console.log(`[API] ${req.method} /api/products request starting...`);
 
-        // 1. Check Environment Variable
+        // 1. Dynamic Import: Mongoose & DB Connect
+        // This ensures if the module fails to load, we catch it here.
+        console.log("Loading modules...");
+        const mongoose = (await import('mongoose')).default;
+        const dbConnect = (await import('./db')).default;
+        console.log("Modules loaded.");
+
+        // 2. Define Schema (Dynamically)
+        const getProductModel = () => {
+            if (mongoose.models.Product) return mongoose.models.Product;
+            const ProductSchema = new mongoose.Schema({
+                category: { type: String, required: true },
+                items: [{
+                    name: { type: String, required: true },
+                    desc: { type: String, required: true },
+                }]
+            });
+            return mongoose.model('Product', ProductSchema);
+        };
+
+        // 3. Check Environment Variable
         if (!process.env.MONGODB_URI) {
-            console.error("CRITICAL: MONGODB_URI is missing");
-            return res.status(500).json({ error: 'Server Config Error: MONGODB_URI is missing.' });
+            throw new Error("MONGODB_URI is missing in environment variables");
         }
 
-        // 2. Connect to Database
+        // 4. Connect to Database
         try {
             await dbConnect();
         } catch (dbError: any) {
@@ -34,80 +40,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(500).json({ error: `Database Connection Failed: ${dbError.message}` });
         }
 
-        // 3. Admin Security Check (Write Operations)
+        // 5. Admin Security Check (Write Operations)
         if (req.method === 'POST' || req.method === 'DELETE') {
             if (!process.env.ADMIN_PASSWORD) {
-                return res.status(500).json({ error: 'Server Config Error: ADMIN_PASSWORD is missing in Vercel Environment Variables.' });
+                return res.status(500).json({ error: 'Server Config Error: ADMIN_PASSWORD is missing.' });
             }
             const adminPassword = req.headers['x-admin-password'];
             if (adminPassword !== process.env.ADMIN_PASSWORD) {
-                console.warn(`Unauthorized Access Attempt. Provided: ${adminPassword}, Expected: ${process.env.ADMIN_PASSWORD}`);
                 return res.status(401).json({ error: 'Unauthorized: Incorrect Admin Password' });
             }
         }
 
-        // 4. Initialize Model
-        let Product;
-        try {
-            Product = getProductModel();
-        } catch (modelError: any) {
-            console.error("Model Error:", modelError);
-            return res.status(500).json({ error: `Server Error: Model initialization failed. ${modelError.message}` });
-        }
+        const Product = getProductModel();
 
-        // 5. Handle Methods
+        // 6. Handle Methods
         if (req.method === 'GET') {
             const products = await Product.find({});
-
-            // Return default list if empty
             if (products.length === 0) {
+                // Hardcoded Default Data used if DB is empty
                 const defaultProducts = [
                     {
                         category: "Billing Solutions",
                         items: [
-                            { name: "Billing Machine (POS)", desc: "All-in-one touch POS systems for retail and restaurants." },
-                            { name: "Thermal Printers", desc: "High-speed 2-inch and 3-inch thermal receipt printers." },
-                            { name: "Bill Rolls", desc: "Premium quality thermal paper rolls in all sizes." },
-                            { name: "Billing Software", desc: "Easy-to-use software for inventory andGST billing." }
+                            { name: "Billing Machine (POS)", desc: "All-in-one touch POS systems." },
+                            { name: "Thermal Printers", desc: "High-speed 2-inch and 3-inch printers." },
+                            { name: "Bill Rolls", desc: "Premium quality thermal paper." },
+                            { name: "Billing Software", desc: "Easy-to-use billing software." }
                         ]
                     },
                     {
                         category: "Security Systems",
                         items: [
-                            { name: "CCTV Cameras", desc: "HD, IP, and Wireless cameras for home and business security." },
-                            { name: "DVR/NVR Systems", desc: "Reliable recording systems with remote viewing capabilities." },
-                            { name: "Biometric Attendance", desc: "Fingerprint and face recognition time attendance systems." }
+                            { name: "CCTV Cameras", desc: "HD, IP, and Wireless cameras." },
+                            { name: "DVR/NVR Systems", desc: "Reliable recording systems." },
+                            { name: "Biometric Attendance", desc: "Fingerprint and face recognition." }
                         ]
                     },
                     {
                         category: "Cash & Automation",
                         items: [
-                            { name: "Cash Counting Machine", desc: "Accurate loose note counters with fake note detection." },
-                            { name: "Weighing Machines", desc: "Digital weighing scales for shops and industrial use." },
-                            { name: "Sealing Machines", desc: "Heat sealers for packaging efficiency." }
+                            { name: "Cash Counting Machine", desc: "Accurate note counters." },
+                            { name: "Weighing Machines", desc: "Digital weighing scales." },
+                            { name: "Sealing Machines", desc: "Heat sealers." }
                         ]
                     }
                 ];
                 return res.status(200).json(defaultProducts);
             }
-
             return res.status(200).json(products);
         }
 
         if (req.method === 'POST') {
-            console.log("POST Request Processing...");
-
-            if (!req.body) {
-                return res.status(400).json({ error: 'Request body is empty' });
-            }
-
+            if (!req.body) return res.status(400).json({ error: 'Request body is empty' });
             const { category, name, desc } = req.body;
+            if (!category || !name || !desc) return res.status(400).json({ error: 'Missing required fields' });
 
-            if (!category || !name || !desc) {
-                return res.status(400).json({ error: 'Missing required fields (category, name, or desc)' });
-            }
-
-            console.log("Searching for category:", category);
             let productCategory = await Product.findOne({ category });
 
             if (productCategory) {
@@ -119,40 +106,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     items: [{ name, desc }]
                 });
             }
-
-            console.log("Product saved.");
             return res.status(201).json({ message: 'Product added successfully', product: productCategory });
         }
 
         if (req.method === 'DELETE') {
             const { categoryId, itemId } = req.body;
-
-            if (!categoryId || !itemId) {
-                return res.status(400).json({ error: 'Missing required IDs' });
-            }
+            if (!categoryId || !itemId) return res.status(400).json({ error: 'Missing required IDs' });
 
             const productCategory = await Product.findById(categoryId);
-            if (!productCategory) {
-                return res.status(404).json({ error: 'Category not found' });
-            }
+            if (!productCategory) return res.status(404).json({ error: 'Category not found' });
 
             productCategory.items = productCategory.items.filter((item: any) => item._id.toString() !== itemId);
 
             if (productCategory.items.length === 0) {
                 await Product.findByIdAndDelete(categoryId);
-                return res.status(200).json({ message: 'Product and empty category deleted' });
+            } else {
+                await productCategory.save();
             }
-
-            await productCategory.save();
-            return res.status(200).json({ message: 'Product deleted successfully' });
+            return res.status(200).json({ message: 'Product deleted' });
         }
 
         return res.status(405).json({ error: 'Method not allowed' });
 
     } catch (globalError: any) {
-        console.error("FATAL API HANDLER CRASH:", globalError);
+        console.error("FATAL HANDLER ERROR:", globalError);
         return res.status(500).json({
-            error: "Internal Server Error (Crash Caught)",
+            error: "Critical Server Error (Caught)",
             message: globalError.message,
             stack: globalError.stack
         });
