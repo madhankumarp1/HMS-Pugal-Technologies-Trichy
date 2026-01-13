@@ -31,6 +31,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 3. Admin Security Check (Write Operations)
     if (req.method === 'POST' || req.method === 'DELETE') {
+        if (!process.env.ADMIN_PASSWORD) {
+            return res.status(500).json({ error: 'Server Config Error: ADMIN_PASSWORD is missing in Vercel Environment Variables.' });
+        }
         const adminPassword = req.headers['x-admin-password'];
         if (adminPassword !== process.env.ADMIN_PASSWORD) {
             return res.status(401).json({ error: 'Unauthorized: Incorrect Admin Password' });
