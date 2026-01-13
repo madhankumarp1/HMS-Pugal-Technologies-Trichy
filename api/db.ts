@@ -1,39 +1,28 @@
-
 import mongoose from 'mongoose';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
+// NOTE: We do NOT throw an error here anymore to prevent top-level crashes.
+// We handle the missing variable inside the function.
 
-
-/**
- * Global is used here to maintain a cached connection across hot reloads
- * in development. This prevents connections growing exponentially
- * during API Route usage.
- */
-let cached = (global as any).mongoose;
-
-if (!cached) {
-    cached = (global as any).mongoose = { conn: null, promise: null };
-}
-
-async function dbConnect() {
-    if (cached.conn) {
-        return cached.conn;
+export default async function dbConnect() {
+    if (mongoose.connection.readyState >= 1) {
+        return;
     }
 
-    if (!cached.promise) {
-        const opts = {
-            bufferCommands: false,
-            serverSelectionTimeoutMS: 5000, // Fail after 5 seconds if not connected
-            socketTimeoutMS: 10000, // Close socket after 10 seconds of inactivity
-        };
+    if (!MONGODB_URI) {
+        throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
+    }
 
-        cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongoose) => {
-            return mongoose;
+    try {
+        console.log('Connecting to MongoDB...');
+        await mongoose.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 10000,
         });
+        console.log("MongoDB Connected Successfully");
+    } catch (error) {
+        console.error("MongoDB Connection Error:", error);
+        throw error;
     }
-    cached.conn = await cached.promise;
-    return cached.conn;
 }
-
-export default dbConnect;
