@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Phone } from 'lucide-react';
-import { cn } from '../lib/utils'; // Assumes you have a utils file for clsx/tailwind-merge
+import { cn } from '../lib/utils';
+import logo from '../assets/logo.png';
 
 export default function Navbar() {
     const [isOpen, setIsOpen] = useState(false);
@@ -25,10 +26,7 @@ export default function Navbar() {
                 <div className="flex justify-between h-20">
                     <div className="flex items-center">
                         <Link to="/" className="flex-shrink-0 flex items-center gap-2">
-                            {/* Placeholder for Logo */}
-                            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white font-bold text-xl">
-                                H
-                            </div>
+                            <img src={logo} alt="HMS Pugal Technologies" className="h-12 w-auto" />
                             <div className="flex flex-col">
                                 <span className="font-bold text-xl tracking-tight text-gray-900 leading-none">HMS Pugal</span>
                                 <span className="text-sm font-medium text-primary tracking-wider">Technologies</span>
