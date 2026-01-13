@@ -16,39 +16,49 @@ const getProductModel = () => {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    // 1. Check Environment Variable
-    if (!process.env.MONGODB_URI) {
-        return res.status(500).json({ error: 'Server Error: MONGODB_URI environment variable is not defined.' });
-    }
-
-    // 2. Connect to Database (Caught)
+    // MASTER TRY/CATCH: This prevents "Invocation Failed" by catching EVERYTHING.
     try {
-        await dbConnect();
-    } catch (error: any) {
-        console.error('Database connection failed:', error);
-        return res.status(500).json({ error: `Database Connection Failed: ${error.message}` });
-    }
+        console.log(`[API] ${req.method} /api/products request received`);
 
-    // 3. Admin Security Check (Write Operations)
-    if (req.method === 'POST' || req.method === 'DELETE') {
-        if (!process.env.ADMIN_PASSWORD) {
-            return res.status(500).json({ error: 'Server Config Error: ADMIN_PASSWORD is missing in Vercel Environment Variables.' });
+        // 1. Check Environment Variable
+        if (!process.env.MONGODB_URI) {
+            console.error("CRITICAL: MONGODB_URI is missing");
+            return res.status(500).json({ error: 'Server Config Error: MONGODB_URI is missing.' });
         }
-        const adminPassword = req.headers['x-admin-password'];
-        if (adminPassword !== process.env.ADMIN_PASSWORD) {
-            return res.status(401).json({ error: 'Unauthorized: Incorrect Admin Password' });
-        }
-    }
 
-    // 4. Initialize Model (Lazy)
-    const Product = getProductModel();
-
-    // 5. Handle Methods
-    if (req.method === 'GET') {
+        // 2. Connect to Database
         try {
+            await dbConnect();
+        } catch (dbError: any) {
+            console.error('Database connection failed:', dbError);
+            return res.status(500).json({ error: `Database Connection Failed: ${dbError.message}` });
+        }
+
+        // 3. Admin Security Check (Write Operations)
+        if (req.method === 'POST' || req.method === 'DELETE') {
+            if (!process.env.ADMIN_PASSWORD) {
+                return res.status(500).json({ error: 'Server Config Error: ADMIN_PASSWORD is missing in Vercel Environment Variables.' });
+            }
+            const adminPassword = req.headers['x-admin-password'];
+            if (adminPassword !== process.env.ADMIN_PASSWORD) {
+                return res.status(401).json({ error: 'Unauthorized: Incorrect Admin Password' });
+            }
+        }
+
+        // 4. Initialize Model
+        let Product;
+        try {
+            Product = getProductModel();
+        } catch (modelError: any) {
+            console.error("Model Error:", modelError);
+            return res.status(500).json({ error: `Server Error: Model initialization failed. ${modelError.message}` });
+        }
+
+        // 5. Handle Methods
+        if (req.method === 'GET') {
             const products = await Product.find({});
 
-            // Return default list if empty (optional demo feature turned off for now, or on if you prefer)
+            // Return default list if empty
             if (products.length === 0) {
                 const defaultProducts = [
                     {
@@ -81,60 +91,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             return res.status(200).json(products);
-        } catch (error) {
-            console.error(error);
-            return res.status(500).json({ error: 'Failed to fetch products' });
         }
-    }
 
-    if (req.method === 'POST') {
-        try {
-            console.log("POST Request received");
+        if (req.method === 'POST') {
+            console.log("POST Request Processing...");
 
             if (!req.body) {
-                console.error("req.body is missing!");
-                return res.status(400).json({ error: 'Request body is empty or not parsed' });
+                return res.status(400).json({ error: 'Request body is empty' });
             }
 
             const { category, name, desc } = req.body;
-            console.log("Payload:", { category, name, desc });
 
             if (!category || !name || !desc) {
                 return res.status(400).json({ error: 'Missing required fields (category, name, or desc)' });
             }
 
-            const Product = getProductModel();
-
-            // Debug: Check if we can find existing category
             console.log("Searching for category:", category);
             let productCategory = await Product.findOne({ category });
 
             if (productCategory) {
-                console.log("Category found, pushing item");
                 productCategory.items.push({ name, desc });
                 await productCategory.save();
             } else {
-                console.log("Category not found, creating new");
                 productCategory = await Product.create({
                     category,
                     items: [{ name, desc }]
                 });
             }
 
-            console.log("Product saved successfully");
+            console.log("Product saved.");
             return res.status(201).json({ message: 'Product added successfully', product: productCategory });
-        } catch (error: any) {
-            console.error("POST Error:", error);
-            // Return the ACTUAL error message to the client
-            return res.status(500).json({
-                error: `Failed to add product: ${error.message}`,
-                stack: error.stack
-            });
         }
-    }
 
-    if (req.method === 'DELETE') {
-        try {
+        if (req.method === 'DELETE') {
             const { categoryId, itemId } = req.body;
 
             if (!categoryId || !itemId) {
@@ -155,12 +144,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             await productCategory.save();
             return res.status(200).json({ message: 'Product deleted successfully' });
-
-        } catch (error) {
-            console.error(error);
-            return res.status(500).json({ error: 'Failed to delete product' });
         }
-    }
 
-    return res.status(405).json({ error: 'Method not allowed' });
+        return res.status(405).json({ error: 'Method not allowed' });
+
+    } catch (globalError: any) {
+        console.error("FATAL API HANDLER CRASH:", globalError);
+        return res.status(500).json({
+            error: "Internal Server Error (Crash Caught)",
+            message: globalError.message,
+            stack: globalError.stack
+        });
+    }
 }
