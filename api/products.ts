@@ -86,28 +86,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'POST') {
         try {
-            const { category, name, desc } = req.body;
+            console.log("POST Request received");
 
-            if (!category || !name || !desc) {
-                return res.status(400).json({ error: 'Missing required fields' });
+            if (!req.body) {
+                console.error("req.body is missing!");
+                return res.status(400).json({ error: 'Request body is empty or not parsed' });
             }
 
+            const { category, name, desc } = req.body;
+            console.log("Payload:", { category, name, desc });
+
+            if (!category || !name || !desc) {
+                return res.status(400).json({ error: 'Missing required fields (category, name, or desc)' });
+            }
+
+            const Product = getProductModel();
+
+            // Debug: Check if we can find existing category
+            console.log("Searching for category:", category);
             let productCategory = await Product.findOne({ category });
 
             if (productCategory) {
+                console.log("Category found, pushing item");
                 productCategory.items.push({ name, desc });
                 await productCategory.save();
             } else {
+                console.log("Category not found, creating new");
                 productCategory = await Product.create({
                     category,
                     items: [{ name, desc }]
                 });
             }
 
+            console.log("Product saved successfully");
             return res.status(201).json({ message: 'Product added successfully', product: productCategory });
-        } catch (error) {
-            console.error(error);
-            return res.status(500).json({ error: 'Failed to add product' });
+        } catch (error: any) {
+            console.error("POST Error:", error);
+            // Return the ACTUAL error message to the client
+            return res.status(500).json({
+                error: `Failed to add product: ${error.message}`,
+                stack: error.stack
+            });
         }
     }
 
