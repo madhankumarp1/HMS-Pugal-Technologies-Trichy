@@ -1,33 +1,57 @@
-import { Check } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+interface ProductItem {
+    name: string;
+    desc: string;
+}
+
+interface ProductCategory {
+    category: string;
+    items: ProductItem[];
+}
 
 export default function ProductsPage() {
-    const products = [
-        {
-            category: "Billing Solutions",
-            items: [
-                { name: "Billing Machine (POS)", desc: "All-in-one touch POS systems for retail and restaurants." },
-                { name: "Thermal Printers", desc: "High-speed 2-inch and 3-inch thermal receipt printers." },
-                { name: "Bill Rolls", desc: "Premium quality thermal paper rolls in all sizes." },
-                { name: "Billing Software", desc: "Easy-to-use software for inventory andGST billing." }
-            ]
-        },
-        {
-            category: "Security Systems",
-            items: [
-                { name: "CCTV Cameras", desc: "HD, IP, and Wireless cameras for home and business security." },
-                { name: "DVR/NVR Systems", desc: "Reliable recording systems with remote viewing capabilities." },
-                { name: "Biometric Attendance", desc: "Fingerprint and face recognition time attendance systems." }
-            ]
-        },
-        {
-            category: "Cash & Automation",
-            items: [
-                { name: "Cash Counting Machine", desc: "Accurate loose note counters with fake note detection." },
-                { name: "Weighing Machines", desc: "Digital weighing scales for shops and industrial use." },
-                { name: "Sealing Machines", desc: "Heat sealers for packaging efficiency." }
-            ]
-        }
-    ];
+    const [products, setProducts] = useState<ProductCategory[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchProducts = async () => {
+            try {
+                // Fetch from the serverless function
+                const response = await fetch('/api/products');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch products');
+                }
+                const data = await response.json();
+                setProducts(data);
+            } catch (err) {
+                console.error(err);
+                setError('Failed to load products. Please try again later.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProducts();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="min-h-[50vh] flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-[50vh] flex items-center justify-center text-red-500">
+                {error}
+            </div>
+        );
+    }
 
     return (
         <div className="bg-white py-12">

@@ -28,8 +28,6 @@ export default function Navbar() {
                         <Link to="/" className="flex-shrink-0 flex items-center gap-2">
                             <img src={logo} alt="HMS Pugal Technologies" className="h-12 w-auto" />
                             <div className="flex flex-col">
-                                <span className="font-bold text-xl tracking-tight text-gray-900 leading-none">HMS Pugal</span>
-                                <span className="text-sm font-medium text-primary tracking-wider">Technologies</span>
                             </div>
                         </Link>
                     </div>
