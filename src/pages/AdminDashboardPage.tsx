@@ -45,7 +45,9 @@ export default function AdminDashboardPage() {
                 setProducts(data);
             } else {
                 const errorData = await response.json().catch(() => ({}));
-                setError(errorData.error || 'Failed to load products');
+                // Show DETAILED message for debugging
+                console.error("API Error Details:", errorData);
+                setError(`${errorData.error || 'Failed to load products'}: ${errorData.message || ''} ${errorData.stack ? '(Check Console)' : ''}`);
             }
         } catch (err) {
             setError('Error loading products: Network or Server Error');
@@ -89,7 +91,8 @@ export default function AdminDashboardPage() {
                     await fetchProducts();
                     alert('Product added successfully!');
                 } else {
-                    alert(`Error: ${data.error || 'Failed to add product'}`);
+                    // Show DETAILED message in alert
+                    alert(`Error: ${data.error}\nDetails: ${data.message || ''}`);
                 }
             } else {
                 // Not JSON (likely HTML 404/500)
