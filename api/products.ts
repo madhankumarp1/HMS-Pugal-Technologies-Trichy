@@ -1,39 +1,32 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import mongoose from 'mongoose';
+import dbConnect from './db';
 
-// NOTE: We rely on DYNAMIC IMPORTS to catch module loading errors.
-// Do not add top-level imports for mongoose or db models.
+// Product Schema defined lazily to avoid top-level crashes
+const getProductModel = () => {
+    if (mongoose.models.Product) return mongoose.models.Product;
+    const ProductSchema = new mongoose.Schema({
+        category: { type: String, required: true },
+        items: [{
+            name: { type: String, required: true },
+            desc: { type: String, required: true },
+            image: { type: String, required: false }
+        }]
+    });
+    return mongoose.model('Product', ProductSchema);
+};
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
         console.log(`[API] ${req.method} /api/products request starting...`);
 
-        // 1. Dynamic Import: Mongoose & DB Connect
-        // This ensures if the module fails to load, we catch it here.
-        console.log("Loading modules...");
-        const mongoose = (await import('mongoose')).default;
-        const dbConnect = (await import('./db')).default;
-        console.log("Modules loaded.");
-
-        // 2. Define Schema (Dynamically)
-        const getProductModel = () => {
-            if (mongoose.models.Product) return mongoose.models.Product;
-            const ProductSchema = new mongoose.Schema({
-                category: { type: String, required: true },
-                items: [{
-                    name: { type: String, required: true },
-                    desc: { type: String, required: true },
-                    image: { type: String, required: false } // Added Image Field
-                }]
-            });
-            return mongoose.model('Product', ProductSchema);
-        };
-
-        // 3. Check Environment Variable
+        // 1. Check Environment Variable
         if (!process.env.MONGODB_URI) {
-            throw new Error("MONGODB_URI is missing in environment variables");
+            console.error("CRITICAL: MONGODB_URI is missing");
+            return res.status(500).json({ error: 'Server Config Error: MONGODB_URI is missing.' });
         }
 
-        // 4. Connect to Database
+        // 2. Connect to Database
         try {
             await dbConnect();
         } catch (dbError: any) {
