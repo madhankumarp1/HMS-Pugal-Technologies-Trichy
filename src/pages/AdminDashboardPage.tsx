@@ -26,6 +26,7 @@ export default function AdminDashboardPage() {
     const [newCategory, setNewCategory] = useState('');
     const [newName, setNewName] = useState('');
     const [newDesc, setNewDesc] = useState('');
+    const [newImage, setNewImage] = useState(''); // New State
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
@@ -73,7 +74,8 @@ export default function AdminDashboardPage() {
                 body: JSON.stringify({
                     category: newCategory,
                     name: newName,
-                    desc: newDesc
+                    desc: newDesc,
+                    image: newImage // Send Image URL
                 })
             });
 
@@ -83,6 +85,7 @@ export default function AdminDashboardPage() {
                 if (response.ok) {
                     setNewName('');
                     setNewDesc('');
+                    setNewImage(''); // Reset Image
                     await fetchProducts();
                     alert('Product added successfully!');
                 } else {
@@ -187,6 +190,17 @@ export default function AdminDashboardPage() {
                                         className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none h-24 resize-none"
                                         required
                                     />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Image URL</label>
+                                    <input
+                                        type="url"
+                                        placeholder="Paste image link here (https://...)"
+                                        value={newImage}
+                                        onChange={e => setNewImage(e.target.value)}
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                                    />
+                                    <p className="text-xs text-slate-500 mt-1">Optional. Paste a link to an image.</p>
                                 </div>
                                 <button
                                     type="submit"
